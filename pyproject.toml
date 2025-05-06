@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "we_sim"
+version = "0.1.0"
+description = "Simulation environments for World Engine"
+authors = [
+    { name = "World Engine Team" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "gymnasium",
+    "mujoco",
+    "mediapy",
+    "tqdm",
+    "mcap",
+    "aiomultiprocess",
+    "uvloop",
+]
+
+[tool.setuptools]
+packages = ["we_sim"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+we_sim = ["assets/**/*"]
+
+[project.scripts]
+render-mcap = "we_sim.scripts.render_mcap:main"
+run-block-pickup = "we_sim.scripts.run_block_pickup:main" 
