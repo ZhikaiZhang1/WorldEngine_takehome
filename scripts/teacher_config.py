@@ -50,11 +50,15 @@ REWARD_WEIGHTS = {
     # "closest_arm": 0.5,
     "joint_vel_panelty":1e-4,
     # "far_arm_penalty": 0.1,
+    "time_penalty"     : 0.01,
+
 }
 
 # ─── TRAINING / CALLBACKS ─────────────────────────────────────────────────────
 TRAINING = {
     "total_timesteps": 1_000_000,
+    "total_iter": 50000,
+
     "eval_freq": 50_000,
     "eval_episodes": 10,
     "save_freq": 50,

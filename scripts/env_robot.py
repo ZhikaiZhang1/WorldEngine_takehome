@@ -34,18 +34,30 @@ class PrivilegedObsWrapper(gym.ObservationWrapper):
         ])
 
 # ─── DYNAMIC REWARD FUNCTIONS ─────────────────────────────────────────────────
-# TODO: make info[] work
 def reward_reach(info,obs):
     # negative distance of closest arm to object
     # return -info['closest_dist']
     left_base_pos = info["base_positions"][0:3]
     right_base_pos = info["base_positions"][3:6]
+    left_gripper_pos = obs["gripper_positions"][0:3]
+    right_gripper_pos = obs["gripper_positions"][3:6]
     block_pos = obs["block_positions"]
+    block_pos_init = info["block_pos_init"]
     # print(left_base_pos.shape)
     # import ipdb;ipdb.set_trace() # TODO check how many env there are, if so may need dim=1
+    distance = np.linalg.norm(left_gripper_pos - block_pos)
+    left_closer = np.linalg.norm(left_base_pos - block_pos_init)>np.linalg.norm(right_base_pos - block_pos_init)
+    if not left_closer:
+        distance = np.linalg.norm(right_gripper_pos - block_pos)
+    block_not_lifted = np.where(obs["block_positions"][2] < OTHER_PARAMS["minimal_height"], 1.0, 0.0)
+    return (1 - np.tanh(distance / OTHER_PARAMS["reach_std"]))*block_not_lifted
 
-    distance = min(np.linalg.norm(left_base_pos - block_pos),np.linalg.norm(right_base_pos - block_pos))
-    return 1 - np.tanh(distance / OTHER_PARAMS["reach_std"])
+def reward_time_penalty(info,obs):
+
+    if info.get("success", False):
+        return 0.0
+    return -1.0
+
 def reward_lift(info, obs):
     # keep the block lifted if the distance between block and target not small enough
     distance_target = np.linalg.norm(obs["block_positions"][0:2]-obs["target_positions"][0:2])
@@ -150,17 +162,13 @@ def make_callbacks(eval_env, train_config, savepath):
         deterministic=True,
         render=False,
     )
-    # chkpt_cb = CheckpointCallback(
-    #     save_freq=train_config["save_freq"],
-    #     save_path=savepath,
-    #     name_prefix="ppo_teacher"
-    # )
     save_iter_cb = SaveEveryIterationCallback(
         save_every = train_config["save_freq_iters"],  # 50
         save_path  = savepath,
         verbose    = 1
     )
-    return [eval_cb,save_iter_cb]
+    stop_cb = StopAfterNIterations(max_iterations=train_config["total_iter"], verbose=1)
+    return [eval_cb,save_iter_cb,stop_cb]
 
 
 class SaveEveryIterationCallback(BaseCallback):
@@ -185,3 +193,25 @@ class SaveEveryIterationCallback(BaseCallback):
     def _on_step(self) -> bool:
         # required abstract method, not used here
         return True
+
+class StopAfterNIterations(BaseCallback):
+    """
+    Stop training after `max_iterations` PPO rollouts.
+    """
+    def __init__(self, max_iterations: int, verbose: int = 0):
+        super().__init__(verbose)
+        self.max_iterations = max_iterations
+        self.iteration_cnt  = 0
+        self._stop_now      = False
+
+    def _on_rollout_end(self) -> None:
+        # Called once per PPO iteration (end of rollout)
+        self.iteration_cnt += 1
+        if self.iteration_cnt >= self.max_iterations:
+            if self.verbose:
+                print(f"[Callback] Reached {self.max_iterations} iterations → stopping")
+            self._stop_now = True
+
+    def _on_step(self) -> bool:
+        # Called after every env.step(); returning False stops training
+        return not self._stop_now

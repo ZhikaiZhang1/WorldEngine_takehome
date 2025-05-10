@@ -13,7 +13,7 @@ import numpy as np
 import mediapy as media
 
 from teacher_config import PPO_PARAMS, ENV_PARAMS, TRAINING
-from env_robot import PrivilegedObsWrapper, RewardShapingWrapper, make_callbacks, EpisodeRewardCallback
+from env_robot import PrivilegedObsWrapper, RewardShapingWrapper, make_callbacks, EpisodeRewardCallback,StopAfterNIterations
 # from .mjx_envs.dual_piper_block_pickup_env import DualPiperBlockPickupEnv
 from we_sim.envs import get_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
@@ -120,6 +120,8 @@ if __name__ == "__main__":
     # Callbacks for eval and checkpoint
     callbacks = make_callbacks(eval_env, TRAINING, savedir)
     callbacks.insert(0, EpisodeRewardCallback())
+
+    
     
     # Train
     model.learn(

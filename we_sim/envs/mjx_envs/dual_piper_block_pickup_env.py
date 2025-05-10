@@ -235,6 +235,7 @@ class DualPiperBlockPickupEnv(WeEnv):
         blocks_at_target = sum(info[f"{block_name}_at_target"] for block_name in self.block_names)
         info["success_rate"] = blocks_at_target / len(self.block_names)
         info["success"] = info["success_rate"] == 1.0
+        info["block_pos_init"] = self.block_pos_init
 
         return info
 
@@ -284,11 +285,20 @@ class DualPiperBlockPickupEnv(WeEnv):
 
         # Get observation and info
         observation = self._get_obs()
+
+        
+        self.block_pos_init = self.get_block()
         info = self._get_info()
 
         # Note: we don't render here, as we want the render happends only within the step function
         return observation, info
-
+    def get_block(self):
+        block_positions = np.zeros(3)  # Changed from 9 to 3
+        for i, block_name in enumerate(self.block_names):
+            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, block_name)
+            block_pos = self.data.xpos[body_id]
+            block_positions[i * 3 : (i + 1) * 3] = block_pos
+        return block_positions
     def step(self, action: np.ndarray = None) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
         """Take a step in the environment."""
 
