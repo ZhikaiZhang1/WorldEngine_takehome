@@ -1,6 +1,7 @@
 
         
 import os
+import re
 
 os.environ["MUJOCO_GL"] = "osmesa"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -14,12 +15,27 @@ import mediapy as media
 from teacher_config import PPO_PARAMS, ENV_PARAMS, TRAINING
 from env_robot import PrivilegedObsWrapper, RewardShapingWrapper, make_callbacks, EpisodeRewardCallback
 # from .mjx_envs.dual_piper_block_pickup_env import DualPiperBlockPickupEnv
-
 from we_sim.envs import get_env
 
 
 args = None
 # Environment constructor
+def get_next_sb3_log_dir(base_log_dir: str, run_prefix: str = "PPO") -> str:
+    """
+    Find the next available PPO_# run directory in a base logging directory.
+    
+    Args:
+        base_log_dir: The parent directory (e.g., "logs/ppo_teacher")
+        run_prefix: The prefix used by SB3 for the runs ("PPO", "SAC", etc.)
+
+    Returns:
+        The full path to the next log directory (e.g., "logs/ppo_teacher/PPO_3")
+    """
+    os.makedirs(base_log_dir, exist_ok=True)
+    existing = [d for d in os.listdir(base_log_dir) if re.match(f"{run_prefix}_\\d+", d)]
+    run_ids = [int(re.search(rf"{run_prefix}_(\d+)", d).group(1)) for d in existing]
+    next_id = max(run_ids, default=0) + 1
+    return os.path.join(base_log_dir, f"{run_prefix}_{next_id}")
 def make_env():
     # Copy env_kwargs and extract reward_type
     env_kwargs = ENV_PARAMS["env_kwargs"].copy()
@@ -57,6 +73,7 @@ if __name__ == "__main__":
 
     # Ensure directories exist
     os.makedirs(PPO_PARAMS["tensorboard_log"], exist_ok=True)
+    savedir = get_next_sb3_log_dir(PPO_PARAMS["tensorboard_log"])
     # os.makedirs(TRAINING["save_path"], exist_ok=True)
 
     # Vectorized environments
@@ -65,27 +82,8 @@ if __name__ == "__main__":
     # eval_env  = DummyVecEnv([make_env])
     eval_env  = VecMonitor(DummyVecEnv([make_env]), PPO_PARAMS["tensorboard_log"])
     
-
-
-
-
-    # 1) Instantiate your env directly—no wrappers
-    # raw_env = DualPiperBlockPickupEnv(**ENV_PARAMS["env_kwargs"])
-    raw_env = get_env("dual_piper_block_pickup", render_mode=args.render_mode)
-
-
-    # 2) Read out the MuJoCo control timestep
-    dt = raw_env.sim.model.opt.timestep
-    max_steps = ENV_PARAMS["env_kwargs"]["max_episode_steps"]
-    print(f"Control timestep (dt) = {dt:.4f} s")
-    print(f"Max episode steps = {max_steps} → episode length ≃ {dt * max_steps:.2f} s")
-
-    # 3) Always close when you’re done
-    raw_env.close()
-
-
-
     
+
     # Instantiate PPO model
     model = PPO(
         policy=PPO_PARAMS["policy"],
@@ -106,13 +104,8 @@ if __name__ == "__main__":
     )
 
     # Callbacks for eval and checkpoint
-    savepath = model.logger.dir
-    callbacks = make_callbacks(eval_env, TRAINING, savepath)
-    # model.save(os.path.join(model.logger.dir, "ppo_teacher_final"))
-
+    callbacks = make_callbacks(eval_env, TRAINING, savedir)
     callbacks.insert(0, EpisodeRewardCallback())
-    # dt = train_env.sim.model.opt.timestep
-    # print("env dt is: ", dt)
     
     # Train
     model.learn(
@@ -124,5 +117,4 @@ if __name__ == "__main__":
 
 
     # Save final policy
-    # model.save(os.path.join(TRAINING["save_path"], "ppo_teacher_final"))
-    model.save(os.path.join(model.logger.dir, "ppo_teacher_final"))
+    model.save(os.path.join(TRAINING["save_path"], "ppo_teacher_final"))
