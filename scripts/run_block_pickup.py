@@ -17,7 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run the block pickup environment")
     parser.add_argument("--render-mode", choices=["human", "rgb_array", "mujoco_gui"], default="mujoco_gui", help="Rendering mode")
     parser.add_argument("--camera", choices=["front", "top", "top-front"], default="top-front", help="Camera view perspective")
-    parser.add_argument("--steps", type=int, default=20, help="Number of steps to run")
+    parser.add_argument("--steps", type=int, default=200, help="Number of steps to run")
     parser.add_argument("--reward", choices=["sparse", "dense"], default="sparse", help="Reward type")
     parser.add_argument("--still", action="store_true", help="Run in still mode")
     parser.add_argument("--record-video", action="store_true", help="Record video from all cameras")

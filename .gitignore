@@ -1,0 +1,63 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+
+# Virtual environments
+venv/
+env/
+*.env
+*.venv
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs and debug
+*.log
+logs/
+*.out
+*.err
+
+# MuJoCo
+*.mjb
+*.stl
+*.mesh
+*.urdf
+*.xml~
+mjkey.txt
+mujoco200/
+mujoco210/
+.mujoco/
+
+# Model checkpoints
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+# TensorBoard and SB3 logs
+tb_logs/
+runs/
+*.tfevents.*
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# SB3 saved models
+models/
+
+# project specific ignores
+logs/
+models/
+camera_recordings/
+test_data/
+uv.lock
+we_sim.egg-info/
+MUJOCO_LOG.TXT

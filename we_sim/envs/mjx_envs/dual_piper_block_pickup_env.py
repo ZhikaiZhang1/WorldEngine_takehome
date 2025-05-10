@@ -45,6 +45,7 @@ class DualPiperBlockPickupEnv(WeEnv):
             "wrist_cam_left": np.zeros((self.h, self.w, 3), dtype=np.uint8),
             "wrist_cam_right": np.zeros((self.h, self.w, 3), dtype=np.uint8),
         }
+        self.prev_action = np.zeros(self.num_dof)
 
         self._camera_io_lock = Lock()
 
@@ -187,6 +188,9 @@ class DualPiperBlockPickupEnv(WeEnv):
             "gripper_positions": gripper_positions.astype(np.float32),
             "color_images": color_images,  # Dictionary of images from all cameras
             "timestamp": timestamp,
+            "cur_action":self.cur_action,
+            "prev_action":self.prev_action
+
         }
 
     def _get_joint_state(self) -> np.ndarray:
@@ -305,6 +309,11 @@ class DualPiperBlockPickupEnv(WeEnv):
         # Check if episode is done
         terminated = info["success"]  # Changed from always False to terminated on success
         truncated = self.steps >= self.max_episode_steps
+        # print("current step: ", self.steps)
+        if truncated or terminated:
+            print("reset here at step",self.steps)
+
+
 
         # Render if in human mode or mujoco_gui mode
         if self.steps % self.control_per_render == 0:
@@ -314,6 +323,7 @@ class DualPiperBlockPickupEnv(WeEnv):
 
         # Update step counter
         self.steps += 1
+        self.prev_action = deepcopy(self.cur_action)
         return observation, reward, terminated, truncated, info
 
     def render(self) -> Optional[np.ndarray]:
