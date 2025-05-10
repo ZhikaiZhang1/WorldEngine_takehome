@@ -57,7 +57,7 @@ TRAINING = {
     "total_timesteps": 1_000_000,
     "eval_freq": 50_000,
     "eval_episodes": 10,
-    "save_freq": 50,
+    "save_freq": 200,
     "save_path": "logs/ppo_teacher",
 }
 

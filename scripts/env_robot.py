@@ -156,3 +156,27 @@ def make_callbacks(eval_env, train_config, savepath):
         name_prefix="ppo_teacher"
     )
     return [eval_cb, chkpt_cb]
+
+
+class SaveEveryIterationCallback(BaseCallback):
+    """
+    Save the model every `save_every` PPO iterations (rollouts).
+    """
+    def __init__(self, save_every: int, save_path: str, verbose=1):
+        super().__init__(verbose)
+        self.save_every = save_every
+        self.save_path  = save_path
+        self.iter_count = 0
+
+    def _on_rollout_end(self) -> None:
+        # This hook is called exactly once per PPO iteration
+        self.iter_count += 1
+        if self.iter_count % self.save_every == 0:
+            path = f"{self.save_path}/model_iter_{self.iter_count}"
+            self.model.save(path)
+            if self.verbose:
+                print(f"→ [Iteration {self.iter_count}] Saved model to: {path}")
+
+    def _on_step(self) -> bool:
+        # required abstract method, not used here
+        return True

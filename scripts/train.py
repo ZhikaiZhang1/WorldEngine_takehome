@@ -16,6 +16,7 @@ from teacher_config import PPO_PARAMS, ENV_PARAMS, TRAINING
 from env_robot import PrivilegedObsWrapper, RewardShapingWrapper, make_callbacks, EpisodeRewardCallback
 # from .mjx_envs.dual_piper_block_pickup_env import DualPiperBlockPickupEnv
 from we_sim.envs import get_env
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 
 args = None
@@ -65,6 +66,8 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=30, help="Frame rate for recorded videos")
     parser.add_argument("--headless", action="store_true", default=False,help="headless mode")
     parser.add_argument("--device", type=str, default="cpu", help="device to run on")
+    parser.add_argument("--num_envs", type=int, default=8, help="number of environments to run on")
+
 
 
 
@@ -77,10 +80,15 @@ if __name__ == "__main__":
     # os.makedirs(TRAINING["save_path"], exist_ok=True)
 
     # Vectorized environments
-    train_env = DummyVecEnv([make_env])
+    # train_env = DummyVecEnv([make_env])
+    # train_env = VecMonitor(train_env, PPO_PARAMS["tensorboard_log"])
+    # # eval_env  = DummyVecEnv([make_env])
+    # eval_env  = VecMonitor(DummyVecEnv([make_env]), PPO_PARAMS["tensorboard_log"])
+    N_ENVS = args.num_envs
+    train_env = SubprocVecEnv([make_env for _ in range(N_ENVS)])
     train_env = VecMonitor(train_env, PPO_PARAMS["tensorboard_log"])
-    # eval_env  = DummyVecEnv([make_env])
-    eval_env  = VecMonitor(DummyVecEnv([make_env]), PPO_PARAMS["tensorboard_log"])
+    eval_env  = VecMonitor(SubprocVecEnv([make_env for _ in range(N_ENVS)]),
+                            PPO_PARAMS["tensorboard_log"])
     
     
 
@@ -89,7 +97,7 @@ if __name__ == "__main__":
         policy=PPO_PARAMS["policy"],
         env=train_env,
         learning_rate=PPO_PARAMS["learning_rate"],
-        n_steps=PPO_PARAMS["n_steps"],
+        n_steps=PPO_PARAMS["n_steps"]//N_ENVS,
         batch_size=PPO_PARAMS["batch_size"],
         gamma=PPO_PARAMS["gamma"],
         gae_lambda=PPO_PARAMS["gae_lambda"],
