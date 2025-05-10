@@ -172,6 +172,7 @@ class DualPiperBlockPickupEnv(WeEnv):
         right_gripper_body = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "right/link7")
         gripper_positions[0:3] = self.data.xpos[left_gripper_body]
         gripper_positions[3:6] = self.data.xpos[right_gripper_body]
+        
 
         # Capture images from all cameras
         # Use cached images if in async render mode
@@ -212,6 +213,11 @@ class DualPiperBlockPickupEnv(WeEnv):
     def _get_info(self) -> Dict[str, Any]:
         """Get additional information about the environment state."""
         info = {}
+        base_positions = np.zeros(6)
+        left_base = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "left/base_link")
+        right_base = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "right/base_link")
+        base_positions[0:3] = self.data.xpos[left_base]
+        base_positions[3:6] = self.data.xpos[right_base]
 
         # Calculate distances between blocks and their targets
         for i, (block_name, target_name) in enumerate(zip(self.block_names, self.target_names)):
@@ -224,7 +230,7 @@ class DualPiperBlockPickupEnv(WeEnv):
             distance = np.linalg.norm(block_pos - target_pos)
             info[f"{block_name}_distance"] = distance
             info[f"{block_name}_at_target"] = distance < 0.05  # 5cm threshold
-
+        info["base_positions"] = base_positions
         # Calculate success rate
         blocks_at_target = sum(info[f"{block_name}_at_target"] for block_name in self.block_names)
         info["success_rate"] = blocks_at_target / len(self.block_names)
@@ -310,13 +316,13 @@ class DualPiperBlockPickupEnv(WeEnv):
         terminated = info["success"]  # Changed from always False to terminated on success
         truncated = self.steps >= self.max_episode_steps
         # print("current step: ", self.steps)
-        if truncated or terminated:
-            print("reset here at step",self.steps)
+        # if truncated or terminated:
+        #     print("reset here at step",self.steps)
 
 
 
         # Render if in human mode or mujoco_gui mode
-        if self.steps % self.control_per_render == 0:
+        if self.steps % self.control_per_render == 0 and self.render_mode != None:
             self._render_frame()
             if self.render_mode == "mujoco_gui":
                 self._render_mujoco_gui()
@@ -349,7 +355,7 @@ class DualPiperBlockPickupEnv(WeEnv):
     def _render_frame(self) -> Optional[np.ndarray]:
         """Render the current frame."""
         # Update scene and render for all cameras
-
+        print("rendering frames...")
         with self._camera_io_lock:
             for cam_name, camera in self.cameras.items():
                 self.renderer.update_scene(self.data, camera, scene_option=self.vis)

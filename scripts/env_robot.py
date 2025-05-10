@@ -38,13 +38,13 @@ class PrivilegedObsWrapper(gym.ObservationWrapper):
 def reward_reach(info,obs):
     # negative distance of closest arm to object
     # return -info['closest_dist']
-    left_gripper_pos = obs["gripper_positions"][0:3]
-    right_gripper_pos = obs["gripper_positions"][3:6]
+    left_base_pos = info["base_positions"][0:3]
+    right_base_pos = info["base_positions"][3:6]
     block_pos = obs["block_positions"]
-    # print(left_gripper_pos.shape)
+    # print(left_base_pos.shape)
     # import ipdb;ipdb.set_trace() # TODO check how many env there are, if so may need dim=1
 
-    distance = min(np.linalg.norm(left_gripper_pos - block_pos),np.linalg.norm(right_gripper_pos - block_pos))
+    distance = min(np.linalg.norm(left_base_pos - block_pos),np.linalg.norm(right_base_pos - block_pos))
     return 1 - np.tanh(distance / OTHER_PARAMS["reach_std"])
 def reward_lift(info, obs):
     # keep the block lifted if the distance between block and target not small enough
@@ -150,12 +150,17 @@ def make_callbacks(eval_env, train_config, savepath):
         deterministic=True,
         render=False,
     )
-    chkpt_cb = CheckpointCallback(
-        save_freq=train_config["save_freq"],
-        save_path=savepath,
-        name_prefix="ppo_teacher"
+    # chkpt_cb = CheckpointCallback(
+    #     save_freq=train_config["save_freq"],
+    #     save_path=savepath,
+    #     name_prefix="ppo_teacher"
+    # )
+    save_iter_cb = SaveEveryIterationCallback(
+        save_every = train_config["save_freq_iters"],  # 50
+        save_path  = savepath,
+        verbose    = 1
     )
-    return [eval_cb, chkpt_cb]
+    return [eval_cb,save_iter_cb]
 
 
 class SaveEveryIterationCallback(BaseCallback):

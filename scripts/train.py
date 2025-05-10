@@ -43,7 +43,11 @@ def make_env():
     # reward_type = env_kwargs.pop("reward_type", "dense")
 
     # Directly instantiate your custom environment
-    env = get_env("dual_piper_block_pickup", render_mode=args.render_mode)
+    env = get_env(
+        env_name = ENV_PARAMS["env_name"],
+        **env_kwargs
+    )
+    # env = get_env("dual_piper_block_pickup", render_mode=args.render_mode)
 
     # env = DualPiperBlockPickupEnv(**env_kwargs)
 
@@ -67,6 +71,7 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", default=False,help="headless mode")
     parser.add_argument("--device", type=str, default="cpu", help="device to run on")
     parser.add_argument("--num_envs", type=int, default=8, help="number of environments to run on")
+    parser.add_argument("--rl-device", type=str, default="cuda:0", help="number of environments to run on")
 
 
 
@@ -109,6 +114,7 @@ if __name__ == "__main__":
         policy_kwargs=PPO_PARAMS["policy_kwargs"],
         tensorboard_log=PPO_PARAMS["tensorboard_log"],
         verbose=PPO_PARAMS["verbose"],
+        device = args.rl_device,
     )
 
     # Callbacks for eval and checkpoint

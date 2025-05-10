@@ -38,7 +38,7 @@ ENV_PARAMS = {
 # ─── REWARD WEIGHTS ───────────────────────────────────────────────────────────
 # Only weights > 0 are applied dynamically via RewardShapingWrapper
 REWARD_WEIGHTS = {
-    "reach": 1.0,
+    "reach": 10.0,
     # "grasp_slip": 5.0,
     # "grasp_close": 2.0,
     "lift": 10.0,
@@ -57,7 +57,8 @@ TRAINING = {
     "total_timesteps": 1_000_000,
     "eval_freq": 50_000,
     "eval_episodes": 10,
-    "save_freq": 200,
+    "save_freq": 50,
+    "save_freq_iters":50,
     "save_path": "logs/ppo_teacher",
 }
 

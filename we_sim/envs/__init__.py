@@ -8,7 +8,7 @@ from .mjx_envs.dual_piper_block_pickup_env import DualPiperBlockPickupEnv
 __all__ = ["WeEnv", "DualPiperBlockPickupEnv", "get_env"]
 
 
-def get_env(env_name: str, render_mode="human") -> WeEnv:
+def get_env(env_name: str, **env_kwargs) -> WeEnv:
     """
     Get an environment by name.
 
@@ -22,6 +22,6 @@ def get_env(env_name: str, render_mode="human") -> WeEnv:
         ValueError: If the environment is not found.
     """
     if env_name == "dual_piper_block_pickup":
-        return DualPiperBlockPickupEnv(render_mode=render_mode)
+        return DualPiperBlockPickupEnv(**env_kwargs)
     else:
         raise ValueError(f"Environment {env_name} not found")

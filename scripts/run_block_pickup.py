@@ -26,10 +26,10 @@ def flatten_privileged(obs: dict) -> np.ndarray:
 
 def find_latest_model(model_dir: str) -> str:
     """
-    Scan `model_dir` for files matching "*_<n>_steps.zip" and return
+    Scan `model_dir` for files matching 'model_iter_<n>.zip' and return
     the one with the highest <n>.
     """
-    pattern = re.compile(r'.*_(\d+)_steps(?:_.*)?\.zip$')
+    pattern = re.compile(r'model_iter_(\d+)\.zip$')
     candidates = []
     for fname in os.listdir(model_dir):
         match = pattern.match(fname)
@@ -37,8 +37,7 @@ def find_latest_model(model_dir: str) -> str:
             steps = int(match.group(1))
             candidates.append((steps, fname))
     if not candidates:
-        raise FileNotFoundError(f"No model files matching '*_<n>_steps.zip' in {model_dir}")
-    # pick the one with the largest step count
+        raise FileNotFoundError(f"No model files matching 'model_iter_<n>.zip' in {model_dir}")
     latest = max(candidates, key=lambda x: x[0])[1]
     return os.path.join(model_dir, latest)
 
@@ -62,7 +61,7 @@ def main():
     if args.record_video:
         os.makedirs(args.output_dir, exist_ok=True)
         video_buffers = {}
-    basepath = "../../logs/ppo_teacher"
+    basepath = "logs/ppo_teacher"
     topdir = os.path.join(basepath, args.model_path)
     model_zip = find_latest_model(topdir)
     model = PPO.load(model_zip)
