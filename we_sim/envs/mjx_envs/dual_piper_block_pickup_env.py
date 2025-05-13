@@ -48,6 +48,7 @@ class DualPiperBlockPickupEnv(WeEnv):
         self.prev_action = np.zeros(self.num_dof)
 
         self._camera_io_lock = Lock()
+        self.info = {}
 
         # Instead of using a relative path, use importlib.resources to locate the assets
         # Try to find the assets directory
@@ -106,12 +107,22 @@ class DualPiperBlockPickupEnv(WeEnv):
 
         # Define action and observation spaces
         # Action space: 16 joint positions (8 for each arm)
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(16,), dtype=np.float32)
+        joint_low = np.array([-2.618,0,-2.697,-1.832,-1.22,-3.14,0,-2.618,0,-2.697,-1.832,-1.22,-3.14,0],dtype=np.float32)
+        joint_high = np.array([2.618,3.14,0,1.832,1.22,3.14,0.04,2.618,3.14,0,1.832,1.22,3.14,0.04],dtype=np.float32)
+        joint_low = np.concatenate([joint_low[0:7], joint_low[6:7], joint_low[7:14], joint_low[13:14]])
+        joint_high = np.concatenate([joint_high[0:7], joint_high[6:7], joint_high[7:14], joint_high[13:14]])
 
+
+        self.action_space = spaces.Box(low=joint_low, high=joint_high, dtype=np.float32)
+        # self.action_space = spaces.Box(low=-3.14, high=3.14, shape=(16,), dtype=np.float32)
+
+
+        
         # Observation space: joint positions, velocities, block positions, target positions, and camera image
         self.observation_space = spaces.Dict(
             {
-                "joint_positions": spaces.Box(low=-np.inf, high=np.inf, shape=(16,), dtype=np.float32),
+                # "joint_positions": spaces.Box(low=-np.inf, high=np.inf, shape=(16,), dtype=np.float32),
+                "joint_positions": spaces.Box(low=joint_low, high=joint_high, dtype=np.float32),
                 "joint_velocities": spaces.Box(low=-np.inf, high=np.inf, shape=(16,), dtype=np.float32),
                 "block_positions": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),  # 1 block x 3 coordinates
                 "target_positions": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),  # 1 target x 3 coordinates
@@ -172,7 +183,8 @@ class DualPiperBlockPickupEnv(WeEnv):
         right_gripper_body = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "right/link7")
         gripper_positions[0:3] = self.data.xpos[left_gripper_body]
         gripper_positions[3:6] = self.data.xpos[right_gripper_body]
-        
+        # print("left distance", np.linalg.norm(gripper_positions[0:3]-block_positions),"right distance", np.linalg.norm(gripper_positions[3:6]-block_positions))
+        # import ipdb;ipdb.set_trace()
 
         # Capture images from all cameras
         # Use cached images if in async render mode
@@ -212,7 +224,7 @@ class DualPiperBlockPickupEnv(WeEnv):
 
     def _get_info(self) -> Dict[str, Any]:
         """Get additional information about the environment state."""
-        info = {}
+        
         base_positions = np.zeros(6)
         left_base = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "left/base_link")
         right_base = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "right/base_link")
@@ -228,16 +240,20 @@ class DualPiperBlockPickupEnv(WeEnv):
             target_pos = self.data.site_xpos[target_site_id]
 
             distance = np.linalg.norm(block_pos - target_pos)
-            info[f"{block_name}_distance"] = distance
-            info[f"{block_name}_at_target"] = distance < 0.05  # 5cm threshold
-        info["base_positions"] = base_positions
+            self.info[f"{block_name}_distance"] = distance
+            self.info[f"{block_name}_at_target"] = distance < 0.05  # 5cm threshold
+        self.info["base_positions"] = base_positions
         # Calculate success rate
-        blocks_at_target = sum(info[f"{block_name}_at_target"] for block_name in self.block_names)
-        info["success_rate"] = blocks_at_target / len(self.block_names)
-        info["success"] = info["success_rate"] == 1.0
-        info["block_pos_init"] = self.block_pos_init
+        blocks_at_target = sum(self.info[f"{block_name}_at_target"] for block_name in self.block_names)
+        self.info["success_rate"] = blocks_at_target / len(self.block_names)
+        self.info["success"] = self.info["success_rate"] == 1.0
+        self.info["block_pos_init"] = self.block_pos_init
+        self.info["gripper_pos_init"] = self.gripper_pos_init
+        self.info["cur_action"] = self.cur_action
 
-        return info
+        # print("self.block_pos_init: ", self.block_pos_init)
+
+        return self.info
 
     def _get_reward(self, info: Dict[str, Any]) -> float:
         """Calculate the reward based on the current state."""
@@ -288,6 +304,13 @@ class DualPiperBlockPickupEnv(WeEnv):
 
         
         self.block_pos_init = self.get_block()
+        self.gripper_pos_init = np.zeros(6)
+        left_gripper_body = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "left/link7")
+        right_gripper_body = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "right/link7")
+        self.gripper_pos_init[0:3] = self.data.xpos[left_gripper_body]
+        self.gripper_pos_init[3:6] = self.data.xpos[right_gripper_body]
+        self.info["prev_block_pos"] = self.block_pos_init
+        
         info = self._get_info()
 
         # Note: we don't render here, as we want the render happends only within the step function
@@ -301,8 +324,10 @@ class DualPiperBlockPickupEnv(WeEnv):
         return block_positions
     def step(self, action: np.ndarray = None) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
         """Take a step in the environment."""
-
+        # before taking the action, update block height
+        self.info["prev_block_pos"] = self.get_block()
         # If no action is provided, use the current action
+        tempaction = deepcopy(self.cur_action)
         if action is None:
             action = deepcopy(self.cur_action)
 
@@ -339,7 +364,7 @@ class DualPiperBlockPickupEnv(WeEnv):
 
         # Update step counter
         self.steps += 1
-        self.prev_action = deepcopy(self.cur_action)
+        self.prev_action = tempaction
         return observation, reward, terminated, truncated, info
 
     def render(self) -> Optional[np.ndarray]:

@@ -9,7 +9,7 @@ import os
 import mediapy as media
 from we_sim.envs import get_env
 import re
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO,SAC
 
 def flatten_privileged(obs: dict) -> np.ndarray:
     """
@@ -36,6 +36,7 @@ def find_latest_model(model_dir: str) -> str:
         if match:
             steps = int(match.group(1))
             candidates.append((steps, fname))
+            print("found ", candidates[-1])
     if not candidates:
         raise FileNotFoundError(f"No model files matching 'model_iter_<n>.zip' in {model_dir}")
     latest = max(candidates, key=lambda x: x[0])[1]
@@ -55,16 +56,24 @@ def main():
     parser.add_argument("--record-video", action="store_true", help="Record video from all cameras")
     parser.add_argument("--output-dir", type=str, default="camera_recordings", help="Directory to save video recordings")
     parser.add_argument("--fps", type=int, default=30, help="Frame rate for recorded videos")
+    parser.add_argument("--algo", type=str, default="PPO", help="which algorithm to run")
+
     args = parser.parse_args()
 
     # Create output directory if recording video
     if args.record_video:
         os.makedirs(args.output_dir, exist_ok=True)
         video_buffers = {}
-    basepath = "logs/ppo_teacher"
+    if args.algo == "PPO":
+        basepath = "logs/ppo_teacher"
+    elif args.algo == "SAC":
+        basepath = "logs/sac_teacher"
     topdir = os.path.join(basepath, args.model_path)
     model_zip = find_latest_model(topdir)
-    model = PPO.load(model_zip)
+    if args.algo == "PPO":
+        model = PPO.load(model_zip)
+    if args.algo == "SAC":
+        model = SAC.load(model_zip)
     env = get_env("dual_piper_block_pickup", render_mode=args.render_mode)
     observation, info = env.reset()
 

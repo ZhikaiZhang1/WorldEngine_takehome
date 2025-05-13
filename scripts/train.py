@@ -4,19 +4,24 @@ import os
 import re
 
 os.environ["MUJOCO_GL"] = "osmesa"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO,SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 import argparse
 import numpy as np
 import mediapy as media
 
-from teacher_config import PPO_PARAMS, ENV_PARAMS, TRAINING
+from teacher_config import PPO_PARAMS, ENV_PARAMS, TRAINING,SAC_PARAMS,REWARD_WEIGHTS
 from env_robot import PrivilegedObsWrapper, RewardShapingWrapper, make_callbacks, EpisodeRewardCallback,StopAfterNIterations
 # from .mjx_envs.dual_piper_block_pickup_env import DualPiperBlockPickupEnv
 from we_sim.envs import get_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
+from env_robot          import (
+                            SaveEveryIterationCallback,
+                            RewardComponentLogger,
+                            AdaptiveLrCallback)
 
 
 args = None
@@ -71,7 +76,8 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", default=False,help="headless mode")
     parser.add_argument("--device", type=str, default="cpu", help="device to run on")
     parser.add_argument("--num_envs", type=int, default=8, help="number of environments to run on")
-    parser.add_argument("--rl-device", type=str, default="cuda:0", help="number of environments to run on")
+    parser.add_argument("--rl-device", type=str, default="cuda", help="number of environments to run on")
+    parser.add_argument("--algo", type=str, default="PPO", help="number of environments to run on")
 
 
 
@@ -82,6 +88,8 @@ if __name__ == "__main__":
     # Ensure directories exist
     os.makedirs(PPO_PARAMS["tensorboard_log"], exist_ok=True)
     savedir = get_next_sb3_log_dir(PPO_PARAMS["tensorboard_log"])
+    savedirSAC = get_next_sb3_log_dir(SAC_PARAMS["tensorboard_log"],run_prefix="SAC")
+
     # os.makedirs(TRAINING["save_path"], exist_ok=True)
 
     # Vectorized environments
@@ -96,40 +104,100 @@ if __name__ == "__main__":
                             PPO_PARAMS["tensorboard_log"])
     
     
+    if args.algo == "PPO":
+        # Instantiate PPO model
+        model = PPO(
+            policy=PPO_PARAMS["policy"],
+            device=args.rl_device,#"cuda:0",
+            env=train_env,
+            learning_rate=PPO_PARAMS["learning_rate"],
+            n_steps=PPO_PARAMS["n_steps"]//N_ENVS,
+            batch_size=PPO_PARAMS["batch_size"],
+            gamma=PPO_PARAMS["gamma"],
+            gae_lambda=PPO_PARAMS["gae_lambda"],
+            ent_coef=PPO_PARAMS["ent_coef"],
+            clip_range=PPO_PARAMS["clip_range"],
+            vf_coef=PPO_PARAMS["vf_coef"],
+            max_grad_norm=PPO_PARAMS["max_grad_norm"],
+            n_epochs=PPO_PARAMS["n_epochs"],
+            policy_kwargs=PPO_PARAMS["policy_kwargs"],
+            tensorboard_log=PPO_PARAMS["tensorboard_log"],
+            verbose=PPO_PARAMS["verbose"],
+            # device = "cuda:0",
+        )
+        # model.policy.to("cuda:0")            # move actor head
+        # model.policy.net.to("cuda:0")        # if you built a custom net  
+        # model.policy.mlp_extractor.to("cuda:0")
+        # model.policy.action_net.to("cuda:0")
+        # model.policy.value_net.to("cuda:0")
+        # # tell SB3’s bookkeeping it’s now on GPU:
+        # model.device = torch.device("cuda:0")
+        # model.set_device("cuda")
+        print("Policy parameters on:", next(model.policy.parameters()).device)
+        # Callbacks for eval and checkpoint
+        callbacks = make_callbacks(eval_env, TRAINING, savedir)
+        callbacks.insert(0, EpisodeRewardCallback())
 
-    # Instantiate PPO model
-    model = PPO(
-        policy=PPO_PARAMS["policy"],
-        env=train_env,
-        learning_rate=PPO_PARAMS["learning_rate"],
-        n_steps=PPO_PARAMS["n_steps"]//N_ENVS,
-        batch_size=PPO_PARAMS["batch_size"],
-        gamma=PPO_PARAMS["gamma"],
-        gae_lambda=PPO_PARAMS["gae_lambda"],
-        ent_coef=PPO_PARAMS["ent_coef"],
-        clip_range=PPO_PARAMS["clip_range"],
-        vf_coef=PPO_PARAMS["vf_coef"],
-        max_grad_norm=PPO_PARAMS["max_grad_norm"],
-        n_epochs=PPO_PARAMS["n_epochs"],
-        policy_kwargs=PPO_PARAMS["policy_kwargs"],
-        tensorboard_log=PPO_PARAMS["tensorboard_log"],
-        verbose=PPO_PARAMS["verbose"],
-        device = args.rl_device,
-    )
+        
+        
+        # Train
+        model.learn(
+            total_timesteps=1e30,
+            callback=callbacks,
+            log_interval    = 1, 
+        )
+    elif args.algo=="SAC":
+        sac_kwargs = SAC_PARAMS.copy()
+        policy        = sac_kwargs.pop("policy")
+        device        = sac_kwargs.pop("device")
+        tb_log        = sac_kwargs.pop("tensorboard_log")
+        verbose       = sac_kwargs.pop("verbose")
 
-    # Callbacks for eval and checkpoint
-    callbacks = make_callbacks(eval_env, TRAINING, savedir)
-    callbacks.insert(0, EpisodeRewardCallback())
+        model = SAC(
+            policy          = policy,
+            env             = train_env,
+            tensorboard_log = tb_log,
+            verbose         = verbose,
+            device          = device,
+            **sac_kwargs,
+        )
 
-    
-    
-    # Train
-    model.learn(
-        total_timesteps=TRAINING["total_timesteps"],
-        callback=callbacks,
-        log_interval    = 1, 
-    )
-    # import ipdb;ipdb.set_trace()
+        # different callbacks from PPO
+        callbacks = []
+
+        # 4a) Evaluate every eval_freq steps, save best model
+        # savedirSAC
+        eval_cb = EvalCallback(
+            eval_env,
+            best_model_save_path = os.path.join(savedirSAC, "best"),
+            log_path             = os.path.join(savedirSAC, "eval"),
+            eval_freq            = 10_000,    
+            n_eval_episodes      = 5,
+            deterministic        = True,
+            render               = False,
+        )
+        callbacks.append(eval_cb)
+
+        # 4b) Save a checkpoint every save_freq steps
+        checkpoint_cb = CheckpointCallback(
+            save_freq   = 50_000,            # every 50k env-steps
+            save_path   = savedirSAC,
+            name_prefix = "model_iter_",
+        )
+        callbacks.append(checkpoint_cb)
+
+        # 4c) Log each of your shaped-reward components
+        reward_logger_cb = RewardComponentLogger(list(REWARD_WEIGHTS.keys()), verbose=1)
+        callbacks.append(reward_logger_cb)
+
+
+        # 5) Train
+        # total_steps = ENV_PARAMS.get("total_timesteps", 16_000_000)
+        model.learn(
+            total_timesteps = 1e30,
+            callback        = callbacks,
+            log_interval    = 10,    # print every 10k steps
+        )
 
 
     # Save final policy
