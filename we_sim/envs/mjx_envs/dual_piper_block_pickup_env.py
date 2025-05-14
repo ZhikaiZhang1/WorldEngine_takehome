@@ -327,7 +327,6 @@ class DualPiperBlockPickupEnv(WeEnv):
         # before taking the action, update block height
         self.info["prev_block_pos"] = self.get_block()
         # If no action is provided, use the current action
-        tempaction = deepcopy(self.cur_action)
         if action is None:
             action = deepcopy(self.cur_action)
 
@@ -335,7 +334,7 @@ class DualPiperBlockPickupEnv(WeEnv):
         # As in real control, both gripper joint is controlled by a single value
         if action.shape == (14,):
             action = np.concatenate([action[0:7], action[6:7], action[7:14], action[13:14]])
-
+        tempaction = deepcopy(self.cur_action)
         # Apply action
         self.data.ctrl[:] = action
 

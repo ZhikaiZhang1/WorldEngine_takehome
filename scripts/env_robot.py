@@ -47,13 +47,13 @@ def choose_gripper(info, obs):
     if d_left < d_right:
         grip = left_grip; reachDist = np.linalg.norm(block_pos - left_grip)
         init_grip = info["gripper_pos_init"][0:3]
-        actiongrip = info["cur_action"][6:7]
+        actiongrip = obs["joint_positions"][6:8]
         arm = "left"
 
     else:
         grip = right_grip; reachDist = np.linalg.norm(block_pos - right_grip)
         init_grip = info["gripper_pos_init"][3:6]
-        actiongrip = info["cur_action"][13:14]
+        actiongrip = obs["joint_positions"][14:16]
         arm = "right"
 
     # print("distance", reachDist,"left", np.linalg.norm(block_pos - left_grip), "right", np.linalg.norm(block_pos - right_grip))
@@ -67,7 +67,7 @@ def left_gripper(info, obs):
 
     grip = left_grip; reachDist = np.linalg.norm(block_pos - left_grip)
     init_grip = info["gripper_pos_init"][0:3]
-    actiongrip = info["cur_action"][6:7]
+    actiongrip = obs["joint_positions"][6:8]
     arm = "left"
     return grip, init_grip, actiongrip, reachDist,arm
 
@@ -115,6 +115,7 @@ def reward_place_stage(info, obs):
     else:
         return 0
     return
+
 
 def reward_reach(info,obs):
     # linear reward for farther, and tanh for closer
@@ -202,8 +203,38 @@ def reward_reach_inv_sq(info,obs):
     #     if choice == "right"
     #         distance3d = 
     #     reward2 = 2*(np.power(2,-distance3d/(OTHER_PARAMS["reach_std"]*2)))
+    if distance < OTHER_PARAMS["close_thresh"]:
+        finger_dis = np.linalg.norm(actiongrip - np.array([0.04,0.04]))
+        reward += 0.5*(np.power(2,-finger_dis/(OTHER_PARAMS["reach_std"]/10)))
         
     return np.where(distance <= 0.3, reward2, reward)*block_not_lifted
+
+def reward_transport(info,obs):
+    # only care about 2d accuracy at first, then towards 3D
+    # 
+    grip, init_grip, actiongrip,reachDist, arm_choice = left_gripper(info, obs)
+
+    distance_target = np.linalg.norm(obs["block_positions"][0:2]-obs["target_positions"][0:2])
+    distancez = np.linalg.norm(obs["block_positions"][2]-obs["target_positions"][2])
+    close_enough = np.where(distance_target > OTHER_PARAMS["putdown_thresh"], 1.0, 0.0)
+    not_close_distance_rew =  (1-close_enough)*obs["block_positions"][2] > OTHER_PARAMS["minimal_height"]* (1 - np.tanh(distance_target / OTHER_PARAMS["transport_std"]))
+    
+    reward = 1.0 / (1.0 + (distance_target/0.7)**2)
+    reward = np.pow(reward, 2)
+    reward2 = 2*(np.power(2,-distance_target/(OTHER_PARAMS["reach_std"])))
+    if distance_target > OTHER_PARAMS["putdown_thresh"]:
+        ret_reward = reward*np.where(lifted(reachDist,obs["block_positions"]),1.0,0.0)
+    elif distance_target <= OTHER_PARAMS["putdown_thresh"]:
+        ret_reward = reward2+2*(np.power(2,-distancez/(OTHER_PARAMS["reach_std"]*2)))
+
+    return ret_reward
+def reward_transport_putdown(info,obs):
+    # add 3d accuracy to put down
+    distance_target2D = np.linalg.norm(obs["block_positions"][0:2]-obs["target_positions"][0:2])
+    distance_target = np.linalg.norm(obs["block_positions"]-obs["target_positions"])
+    close_enough = np.where(distance_target2D < OTHER_PARAMS["putdown_thresh"], 1.0, 0.0)
+    putdown_rew =  close_enough*(1 - np.tanh(distance_target / OTHER_PARAMS["transport_putdown_std"]))
+    return putdown_rew
 
 def gaussian_tolerance(d, bounds=(0, 0.05), margin=0.35):
     lower, upper = bounds
@@ -241,19 +272,7 @@ def reward_lift(info, obs):
     close_enough = np.where(distance_target > OTHER_PARAMS["putdown_thresh"], 1.0, 0.0)
     return np.where(obs["block_positions"][2] > OTHER_PARAMS["minimal_height"], 1.0, 0.0)*close_enough
 
-def reward_transport(info,obs):
-    # only care about 2d accuracy
-    distance_target = np.linalg.norm(obs["block_positions"][0:2]-obs["target_positions"][0:2])
-    close_enough = np.where(distance_target > OTHER_PARAMS["putdown_thresh"], 1.0, 0.0)
-    not_close_distance_rew =  (1-close_enough)*obs["block_positions"][2] > OTHER_PARAMS["minimal_height"]* (1 - np.tanh(distance_target / OTHER_PARAMS["transport_std"]))
-    return not_close_distance_rew
-def reward_transport_putdown(info,obs):
-    # add 3d accuracy to put down
-    distance_target2D = np.linalg.norm(obs["block_positions"][0:2]-obs["target_positions"][0:2])
-    distance_target = np.linalg.norm(obs["block_positions"]-obs["target_positions"])
-    close_enough = np.where(distance_target2D < OTHER_PARAMS["putdown_thresh"], 1.0, 0.0)
-    putdown_rew =  close_enough*(1 - np.tanh(distance_target / OTHER_PARAMS["transport_putdown_std"]))
-    return putdown_rew
+
 
 def reward_action_penalty(info,obs):
     return np.sum(np.square(obs["cur_action"]-obs["prev_action"]))

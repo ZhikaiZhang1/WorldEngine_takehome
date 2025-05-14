@@ -107,13 +107,13 @@ REWARD_WEIGHTS = {
     # "gaussian_reach": 2.0,
     # "reach_stage":100.0,
     "pick_stage":1.0,
-    "place_success":300,
+    "place_success":1000,
     # "place_stage":5.0,
     # "drop_panelty_stage":1000.0,
     # "grasp_slip": 5.0,
     # "grasp_close": 2.0,
     # "lift": 15.0,
-    "transport": 15.0,
+    "transport": 5.0,
     # "transport_putdown": 5.0,
     # "place_success": 10.0,
     # "place_accuracy": 3.0,
@@ -147,14 +147,12 @@ OTHER_PARAMS = {
     
     "reach_inv_sq_thresh": 0.1,
     "minimal_height": 0.07,
-    "putdown_thresh":0.01,
+    "putdown_thresh":0.05,
     "transport_std":0.3,
     "transport_putdown_std":0.05,
     "grasp_scale": 50,
     "maxPlacingDist":0.1,
     # "lin2tanh_connect":0.1,
     "lin2tanh_connect":0.1,
-
-
-
+    "actiongrip_max": 0.04,
 }
